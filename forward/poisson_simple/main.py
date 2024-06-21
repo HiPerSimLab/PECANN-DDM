@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from losses import u_exact, physics_loss, boundary_loss, avg_if_loss, s_exact
 from sample import rank_domain, fetch_interior_data, fetch_boundary_data, fetch_interface_data, fetch_uniform_mesh
-from post_process import contour_prediction, plot_exchange, plot_update, sample_residual_distribution
+from post_process import contour_prediction
 
 
 # In[2]:
@@ -104,7 +104,7 @@ def modelling(domain):
               "stdev": torch.from_numpy(coords_stat[1])}
     model = Network(in_N=2, m=20, H_Layer=3, out_N=1, **kwargs)
     model.to(device)
-    print(model)
+    #print(model)
     print(model.mu)
     print(model.std)
     pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -117,33 +117,22 @@ def modelling(domain):
 
 
 def paraing(n_lambda, model):
-    Alpha  = torch.ones(2, 1, device=device) # Actually [alpha, beta]
-    Alpha  = Alpha.requires_grad_(True)
-    Mu     = torch.ones(n_lambda, 1, device=device) # BC, PDE constraints
+    Robin  = torch.ones(2, 1, device=device) # Actually [alpha, beta]
+    Robin  = Robin.requires_grad_(True)
+    Mu     = torch.ones(n_lambda, 1, device=device) # BC, PDE
     Lambda = Mu * 1.
     Bar_v  = Lambda * 0.
 
     optim_change  = True
     optimizer     = optim.Adam(model.parameters())#optim.LBFGS(model.parameters(),lr=1e-1,line_search_fn="strong_wolfe")
-    optim_alpha   = optim.Adam([Alpha],maximize=True, lr=1e-3)
+    optim_robin   = optim.Adam([Robin],maximize=True, lr=1e-3)
 
-    return Alpha, Lambda, Mu, Bar_v, optim_change, optimizer, optim_alpha
+    return Robin, Lambda, Mu, Bar_v, optim_change, optimizer, optim_robin
 
 def intering(x_int):
     u_adj  = torch.zeros_like(x_int, device=device)
     du_adj = torch.zeros_like(x_int, device=device)
     return u_adj, du_adj
-
-def voidlist():
-    mu_s     = []
-    lambda_s = []
-    constr_s = []
-    object_s = []
-    alpha_s  = []
-    f_g_s    = []
-    l2_s  = []
-    linf_s = []
-    return mu_s, lambda_s, constr_s, object_s, alpha_s, f_g_s, l2_s, linf_s
 
 
 # In[5]:
@@ -175,44 +164,8 @@ def exchange_interface(model, x, y, rank):
 # In[6]:
 
 
-def printing_points(x_dm_0,y_dm_0,x_dm_1,y_dm_1, x_bc,y_bc, x_int,y_int, trial):
-    data_dom_0 = torch.cat((x_dm_0,y_dm_0), dim=1).cpu().detach().numpy()
-    data_dom_1 = torch.cat((x_dm_1,y_dm_1), dim=1).cpu().detach().numpy()
-    data_bc  = torch.cat((x_bc,y_bc), dim=1).cpu().detach().numpy()
-    data_int = torch.cat((x_int.T.reshape(-1,1),y_int.T.reshape(-1,1)), dim=1).cpu().detach().numpy()
-    np.savetxt(f"data/{trial}_dom_0.dat", data_dom_0, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_dom_1.dat", data_dom_1, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_bc.dat", data_bc, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_int.dat", data_int, fmt="%.6e", delimiter=" ")
-
-def printing(outer_iter, epochs, mu_s, lambda_s, constr_s, object_s, 
-             alpha_s, f_g_s, l2_s, linf_s, rank):
-    outer_iter_s = np.arange(1, outer_iter+1).reshape(-1, 1)
-    mu_output = np.concatenate((outer_iter_s, np.asarray(mu_s)), axis=1)
-    lambda_output = np.concatenate((outer_iter_s, np.asarray(lambda_s)), axis=1)
-    constr_output = np.concatenate((outer_iter_s, np.asarray(constr_s)), axis=1)
-    object_output = np.concatenate((outer_iter_s, np.asarray(object_s)), axis=1)
-    alpha_output = np.concatenate((outer_iter_s, np.asarray(alpha_s)), axis=1)
-    f_g_s_output = np.concatenate((outer_iter_s, np.asarray(f_g_s)), axis=1)
-    l2_output = np.concatenate((outer_iter_s, np.asarray(l2_s)[:,None]), axis=1)
-    linf_output = np.concatenate((outer_iter_s, np.asarray(linf_s)[:,None]), axis=1)
-
-    np.savetxt(f"data/{trial}_{rank}_mu.dat", mu_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_lambda.dat", lambda_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_constr.dat", constr_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_object.dat", object_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_alpha.dat", alpha_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_f_g_loss.dat", f_g_s_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_l2.dat", l2_output, fmt="%.6e", delimiter=" ")
-    np.savetxt(f"data/{trial}_{rank}_linf.dat", linf_output, fmt="%.6e", delimiter=" ")
-
-
-# In[7]:
-
-
 def training(rank, epochs, model, x_dm,y_dm, x_bc,y_bc, x_int,y_int, 
-             u_adj, du_adj, Alpha, Lambda, Mu, Bar_v, optimizer, optim_alpha,
-             constr_s, object_s, alpha_s, f_g_s, mu_s, lambda_s):
+             u_adj, du_adj, Robin, Lambda, Mu, Bar_v, optimizer, optim_robin):
     for epoch in range(epochs):
         def _closure():
             model.eval()
@@ -222,41 +175,34 @@ def training(rank, epochs, model, x_dm,y_dm, x_bc,y_bc, x_int,y_int,
             bc_loss = boundary_loss(model, x_bc,y_bc)
             avg_bc_loss = torch.mean(bc_loss).reshape(1, 1)
 
-            f_loss, g_loss, r_loss, avg_int_loss = avg_if_loss(Alpha, model, x_int,y_int, u_adj, du_adj)
+            avg_int_loss = avg_if_loss(Robin, model, x_int,y_int, u_adj, du_adj)
 
             objective = avg_int_loss
             constr = torch.cat((avg_bc_loss, avg_pde_loss),dim=0)
             loss = objective + Lambda.T @ constr + 0.5 * Mu.T @ constr.pow(2)
-            return objective, constr, loss, torch.cat((f_loss, g_loss, r_loss),dim=0)
+            return objective, constr, loss
 
         def closure():
             if torch.is_grad_enabled():
                 model.train()
                 optimizer.zero_grad()
-                optim_alpha.zero_grad()
-            objective, constr, loss, f_g_loss = _closure()
+                optim_robin.zero_grad()
+            objective, constr, loss = _closure()
             if loss.requires_grad:
                   loss.backward()
             return loss
         optimizer.step(closure)
-        optim_alpha.step(closure)
+        optim_robin.step(closure)
 
-        objective, constr, loss, f_g_loss = _closure()
+        objective, constr, loss = _closure()
         with torch.no_grad():
             Bar_v        = 0.99*Bar_v + 0.01*constr.pow(2)
             Mu           = 1e-2 / (torch.sqrt(Bar_v) + 1e-8)
             Lambda      += Mu * constr
             
-        if epoch%5 == 0:
+        if epoch%10 == 0:
             print('rank %d: n = %d, objective = %.3e, constr_loss = %.3e, %.3e'%(rank, epoch, objective,
             constr[0], constr[1]))
-
-    constr_s.append(constr.cpu().detach().numpy().flatten())
-    object_s.append(objective.cpu().detach().numpy().flatten())
-    alpha_s.append(Alpha.cpu().detach().numpy().flatten()) #record Alpha = [alpha, beta]
-    f_g_s.append(f_g_loss.cpu().detach().numpy().flatten())
-    mu_s.append(Mu.cpu().numpy().flatten())
-    lambda_s.append(Lambda.detach().cpu().numpy().flatten())
 
 
 # In[8]:
@@ -297,10 +243,11 @@ def evaluate_write(model_0, model_1, full_domain, test_dis, write, methodname, t
     return l2_0.item(), linf_0.item(), l2_1.item(), linf_1.item()
 
 
-def evaluate(model_0, model_1, full_domain, n_test):
+def evaluate(model_0, model_1, full_domain, test_dis):
     model_0.eval()
     model_1.eval()
-    x_test, y_test = fetch_interior_data(full_domain, n_test)
+    surrounding=True
+    x_test, y_test = fetch_uniform_mesh(full_domain, test_dis, surrounding)
     x_test = x_test.to(device)
     y_test = y_test.to(device)
     mask = (x_test > 0.25) & (x_test < 0.75) & (y_test > 0.25) & (y_test < 0.75)
@@ -348,9 +295,8 @@ n_dom = 400
 n_bound = 80
 n_inter = 80
 
-n_test = 1002001
-test_dis = [100, 100]
-methodname = f'psn_xpinn_dom{n_dom}_bd{n_bound}'
+test_dis = [1000, 1000]
+methodname = f'psn_simple_dom{n_dom}_bd{n_bound}'
 
 
 # In[10]:
@@ -360,22 +306,18 @@ l2_norms = []
 for trial in range(1, trials+1):
     print("*"*20 + f' run({trial}) '+"*"*20)
     x_dm_0,y_dm_0,x_dm_1,y_dm_1, x_bc_0,y_bc_0, x_bc_1,y_bc_1, x_int,y_int = sampling(full_domain, domain_0, domain_1, n_dom, n_bound, n_inter)
-    printing_points(x_dm_0,y_dm_0,x_dm_1,y_dm_1, x_bc_0,y_bc_0, x_int,y_int, trial)
 
     model_0    = modelling(domain_0)
     model_1    = modelling(domain_1)
 
     n_lambda = 2
-    Alpha_0, Lambda_0, Mu_0, Bar_v_0, optim_change, optimizer_0, optim_alpha_0 = paraing(n_lambda, model_0)
-    Alpha_1, Lambda_1, Mu_1, Bar_v_1, optim_change, optimizer_1, optim_alpha_1 = paraing(n_lambda, model_1)
+    Robin_0, Lambda_0, Mu_0, Bar_v_0, optim_change, optimizer_0, optim_robin_0 = paraing(n_lambda, model_0)
+    Robin_1, Lambda_1, Mu_1, Bar_v_1, optim_change, optimizer_1, optim_robin_1 = paraing(n_lambda, model_1)
 
     u_adj_0, du_adj_0 = intering(x_int)
     u_adj_1, du_adj_1 = intering(x_int)
     
-    mu_s_0, lambda_s_0, constr_s_0, object_s_0, alpha_s_0, f_g_s_0, l2_s_0, linf_s_0 = voidlist()
-    mu_s_1, lambda_s_1, constr_s_1, object_s_1, alpha_s_1, f_g_s_1, l2_s_1, linf_s_1 = voidlist()
-    
-    # Training loop
+    # Outer Iteration loops
     for count in range(1, outer_iter + 1):
         print("*"*20 + f' outer iteration ({count}) '+"*"*20)
         if count > 1 and optim_change:
@@ -385,45 +327,31 @@ for trial in range(1, trials+1):
             
         rank = 0
         training(rank, epochs, model_0, x_dm_0,y_dm_0, x_bc_0,y_bc_0, x_int,y_int, 
-             u_adj_0, du_adj_0, Alpha_0, Lambda_0, Mu_0, Bar_v_0, optimizer_0, optim_alpha_0,
-             constr_s_0, object_s_0, alpha_s_0, f_g_s_0, mu_s_0, lambda_s_0)
+             u_adj_0, du_adj_0, Robin_0, Lambda_0, Mu_0, Bar_v_0, optimizer_0, optim_robin_0)
         rank = 1
         training(rank, epochs, model_1, x_dm_1,y_dm_1, x_bc_1,y_bc_1, x_int,y_int, 
-             u_adj_1, du_adj_1, Alpha_1, Lambda_1, Mu_1, Bar_v_1, optimizer_1, optim_alpha_1,
-             constr_s_1, object_s_1, alpha_s_1, f_g_s_1, mu_s_1, lambda_s_1)
+             u_adj_1, du_adj_1, Robin_1, Lambda_1, Mu_1, Bar_v_1, optimizer_1, optim_robin_1)
         
         rank = 0
         u_adj_1, du_adj_1 = exchange_interface(model_0, x_int, y_int, rank)
         rank = 1
         u_adj_0, du_adj_0 = exchange_interface(model_1, x_int, y_int, rank)
         
-        l2_0, linf_0, l2_1, linf_1 = evaluate_write(model_0, model_1, full_domain, test_dis, False, methodname, trial)
-        l2_s_0.append(l2_0)
-        linf_s_0.append(linf_0)
-        l2_s_1.append(l2_1)
-        linf_s_1.append(linf_1)
         if count % 20 == 0:
+            l2_0, linf_0, l2_1, linf_1 = evaluate_write(model_0, model_1, full_domain, test_dis, False, methodname,trial)
             rank = 0
             print('rank %d: count = %d, l2 norm = %.3e, linf norm = %.3e'%(rank, count, l2_0, linf_0))
-            printing(count, epochs, mu_s_0, lambda_s_0, constr_s_0, object_s_0, alpha_s_0, f_g_s_0, l2_s_0, linf_s_0, rank)
             rank = 1
             print('rank %d: count = %d, l2 norm = %.3e, linf norm = %.3e'%(rank, count, l2_1, linf_1))
-            printing(count, epochs, mu_s_1, lambda_s_1, constr_s_1, object_s_1, alpha_s_1, f_g_s_1, l2_s_1, linf_s_1, rank)
     
     torch.save(model_0.state_dict(), f"{methodname}_{trial}_0.pt")
     torch.save(model_1.state_dict(), f"{methodname}_{trial}_1.pt")
     
-    rank = 0
-    printing(outer_iter, epochs, mu_s_0, lambda_s_0, constr_s_0, object_s_0, alpha_s_0, f_g_s_0, l2_s_0, linf_s_0, rank)
-    rank = 1
-    printing(outer_iter, epochs, mu_s_1, lambda_s_1, constr_s_1, object_s_1, alpha_s_1, f_g_s_1, l2_s_1, linf_s_1, rank)
-    
     # Evaluate
-    l2 = evaluate(model_0, model_1, full_domain, n_test)
-    l2_0, linf_0, l2_1, linf_1 = evaluate_write(model_0, model_1, full_domain, test_dis, True, methodname, trial)
+    l2 = evaluate(model_0, model_1, full_domain, test_dis)
+    l2_0, linf_0, l2_1, linf_1 = evaluate_write(model_0, model_1, full_domain, test_dis, True, methodname,trial)
     l2_norms.append(l2)
     print('l2 norm = %.3e'%(l2))
-    
 
 
 # In[ ]:
@@ -441,12 +369,6 @@ print(f"relative l2 error :{l2_norms[trial2[0]-1]:2.3e}")
 print('best trial: ', trial2[1])
 print(f"relative l2 error :{l2_norms[trial2[1]-1]:2.3e}")
 
-data_summary = [np.mean(l2_norms), np.std(l2_norms), trial2[1], l2_norms[trial2[1]-1],
-                                                 trial2[0], l2_norms[trial2[0]-1]]
-data_summary = np.asarray(data_summary)
-filename = f'./data/{methodname}_summary.dat'
-np.savetxt(filename, data_summary, fmt='%.6e')
-
 
 # In[ ]:
 
@@ -455,14 +377,9 @@ np.savetxt(filename, data_summary, fmt='%.6e')
 contour_prediction(test_dis, trial2[0], methodname)
 contour_prediction(test_dis, trial2[1], methodname)
 
-#sample_residual_distribution(omega, test_dis, trial2[0], dims, size, methodname)
-#sample_residual_distribution(omega, test_dis, trial2[1], dims, size, methodname)
-
-#plot_update(trial2[0], outer_iter, epochs, methodname)
-#plot_update(trial2[1], outer_iter, epochs, methodname)
-
 
 # In[ ]:
+
 
 
 

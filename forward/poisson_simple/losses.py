@@ -47,7 +47,7 @@ def boundary_loss(model,x,y):
         e       = u - u_bc
         return e.pow(2)
 
-def avg_if_loss(Alpha, model, x, y, u_adj, du_adj):
+def avg_if_loss(Robin, model, x, y, u_adj, du_adj):
     u    = model(x, y)
     du   = torch.zeros_like(x).to(device)
     
@@ -65,9 +65,8 @@ def avg_if_loss(Alpha, model, x, y, u_adj, du_adj):
     mask = x == 0.25 # Left edge (0.25, y)
     du[mask] = u_x[mask]
 
-    F    = u - u_adj  # interface dirichlet residual
-    G    = du - du_adj # interface flux residual
-    R    = Alpha[0] * F + Alpha[1] * G
-
-    avg_loss =  (Alpha[0] * F).pow(2).mean() + (Alpha[1] * G).pow(2).mean()
-    return F.pow(2).mean().reshape(-1,1), G.pow(2).mean().reshape(-1,1), R.pow(2).mean().reshape(-1,1), avg_loss.reshape(-1,1)
+    D    = u - u_adj  # interface dirichlet residual
+    N    = du - du_adj # interface neumann residual
+    
+    avg_loss =  (Robin[0] * D).pow(2).mean() + (Robin[1] * N).pow(2).mean()
+    return avg_loss.reshape(-1,1)
