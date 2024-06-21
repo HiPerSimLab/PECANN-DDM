@@ -6,13 +6,11 @@
 #SBATCH --time=00-10:00:00          # total run time limit (HH:MM:SS)
 #SBATCH --error=job.%J.err
 #SBATCH --output=job.%J.out
-crc-job-stats
 
 module purge
 
 TF_CPP_MIN_LOG_LEVEL=3
 
-#module load horovod/python3.8_pytorch
 module load python/3.7.0 venv/wrap
 
 module load gcc/8.2.0 
@@ -31,6 +29,5 @@ else
     echo "mpi4py is already installed."
 fi
             
-
 mpirun -n 25 python -u main.py
 
