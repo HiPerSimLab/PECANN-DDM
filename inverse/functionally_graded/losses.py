@@ -54,7 +54,7 @@ def boundary_loss(model,x,y):
         e2      = (k - k_bc).pow(2)
         return e2
 
-def avg_if_loss(Alpha, model, x, y, u_adj, k_adj, du_adj):
+def avg_if_loss(Robin, model, x, y, u_adj, k_adj, du_adj):
     if torch.isnan(x).any():
         return torch.zeros_like(x)
     else:
@@ -77,8 +77,8 @@ def avg_if_loss(Alpha, model, x, y, u_adj, k_adj, du_adj):
             N    = du_col - du_adj[:, i].reshape(-1, 1) # interface neumann residual
             D    = u_col - u_adj[:, i].reshape(-1, 1)  # interface dirichlet residual - for temperature
             
-            # Alpha[0]: Dirichlet; [1]: Neumann
-            avg_loss[i] = ( Alpha[0].pow(2) * D.pow(2) ).mean() + (Alpha[1] * N).pow(2).mean() 
+            # Robin[0]: Dirichlet; [1]: Neumann
+            avg_loss[i] = ( Robin[0].pow(2) * D.pow(2) ).mean() + (Robin[1] * N).pow(2).mean() 
         return torch.mean(avg_loss).reshape(-1,1)
 
 def measurement_loss(model,x,y):

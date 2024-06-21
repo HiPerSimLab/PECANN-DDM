@@ -205,8 +205,8 @@ def modelling(domain):
     return model
 
 def paraing():
-    Alpha  = torch.ones(2, 1, device=device) # Actually [alpha, beta]
-    Alpha  = Alpha.requires_grad_(True)
+    Robin  = torch.ones(2, 1, device=device) # Actually [alpha, beta]
+    Robin  = Robin.requires_grad_(True)
     Mu     = torch.ones(1 + 2, 1, device=device) # BC, Data, PDE constraints
     Lambda = Mu * 1.
     Bar_v  = Lambda * 0.
@@ -214,9 +214,9 @@ def paraing():
     optim_change  = False
     optimizer     = optim.Adam(model.parameters(), lr=5e-3)
     scheduler     = ReduceLROnPlateau(optimizer, patience=100, factor=0.95)
-    optim_alpha   = optim.Adam([Alpha],maximize=True, lr=1e-4)
+    optim_robin   = optim.Adam([Robin],maximize=True, lr=1e-4)
     
-    return Alpha, Lambda, Mu, Bar_v, optim_change, optimizer, scheduler, optim_alpha
+    return Robin, Lambda, Mu, Bar_v, optim_change, optimizer, scheduler, optim_robin
 
 def intering(x_int):
     u_adj  = torch.zeros_like(x_int, device=device)
@@ -229,7 +229,7 @@ def intering(x_int):
 
 
 def training(rank, epochs, model, x_dm,y_dm, x_da,y_da, x_bc,y_bc, x_int,y_int, u_adj, k_adj, du_adj, 
-            Alpha, Lambda, Mu, Bar_v, optimizer, scheduler, optim_alpha):
+            Robin, Lambda, Mu, Bar_v, optimizer, scheduler, optim_robin):
     for epoch in range(epochs):
         def _closure():
             model.eval()
@@ -239,7 +239,7 @@ def training(rank, epochs, model, x_dm,y_dm, x_da,y_da, x_bc,y_bc, x_int,y_int, 
             bc_loss = boundary_loss(model, x_bc,y_bc)
             avg_bc_loss = torch.mean(bc_loss).reshape(1, 1)
 
-            avg_int_loss = avg_if_loss(Alpha, model,x_int,y_int, u_adj, k_adj, du_adj)
+            avg_int_loss = avg_if_loss(Robin, model,x_int,y_int, u_adj, k_adj, du_adj)
             
             data_u_loss, _ = measurement_loss(model, x_da, y_da)
             avg_data_loss = torch.mean(data_u_loss).reshape(1, 1)
@@ -253,13 +253,13 @@ def training(rank, epochs, model, x_dm,y_dm, x_da,y_da, x_bc,y_bc, x_int,y_int, 
             if torch.is_grad_enabled():
                 model.train()
                 optimizer.zero_grad()
-                optim_alpha.zero_grad()
+                optim_robin.zero_grad()
             objective, constr, loss = _closure()
             if loss.requires_grad:
                   loss.backward()
             return loss
         optimizer.step(closure)
-        optim_alpha.step(closure)
+        optim_robin.step(closure)
 
         objective, constr, loss = _closure()
         with torch.no_grad():
@@ -387,7 +387,7 @@ for trial in range(1, trials+1):
      
     model      = modelling(domain)
     
-    Alpha, Lambda, Mu, Bar_v, optim_change, optimizer, scheduler, optim_alpha = paraing()
+    Robin, Lambda, Mu, Bar_v, optim_change, optimizer, scheduler, optim_robin = paraing()
 
     u_adj, k_adj, du_adj = intering(x_int)
 
@@ -400,7 +400,7 @@ for trial in range(1, trials+1):
         
         print("*"*20 + f' outer iteration ({count}) '+"*"*20) 
         training(rank, epochs, model, x_dm,y_dm, x_da,y_da, x_bc,y_bc, x_int,y_int, 
-                u_adj, k_adj, du_adj, Alpha, Lambda, Mu, Bar_v, optimizer, scheduler, optim_alpha)
+                u_adj, k_adj, du_adj, Robin, Lambda, Mu, Bar_v, optimizer, scheduler, optim_robin)
         
         u_adj, k_adj, du_adj = exchange_interface(model, x_int,y_int, cart_comm, rank, device)
         
