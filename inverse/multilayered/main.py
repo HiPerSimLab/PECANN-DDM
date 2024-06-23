@@ -435,12 +435,6 @@ if rank == 0:
     print('best trial: ', trial2[1])
     print(f"relative l2 error :{l2_norms[trial2[1]-1]:2.3e}")
 
-    data_summary = [np.mean(l2_norms), np.std(l2_norms), trial2[1], l2_norms[trial2[1]-1],
-                                                     trial2[0], l2_norms[trial2[0]-1]]
-    data_summary = np.asarray(data_summary)
-    filename = f'./data/{methodname}_summary.dat'
-    np.savetxt(filename, data_summary, fmt='%.6e')
-
 
 # In[13]:
 
