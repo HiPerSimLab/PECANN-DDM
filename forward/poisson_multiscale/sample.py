@@ -138,4 +138,3 @@ def fetch_uniform_mesh(domain, dom_dis, surrounding=False):
     x = x.flatten()[:,None]
     y = y.flatten()[:,None]
     return x,y
-

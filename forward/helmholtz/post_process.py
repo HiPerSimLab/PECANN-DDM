@@ -17,7 +17,7 @@ from matplotlib.colors import LogNorm
 from matplotlib.cm import ScalarMappable
 from scipy.interpolate import griddata
 
-from sample import rank_domain, fetch_interior_data
+#from sample import rank_domain, fetch_interior_data
 
 
 # In[2]:
@@ -70,25 +70,24 @@ torch.set_default_dtype(torch.float64)
 # In[88]:
 
 
-
-def contour_prediction(omega, test_dis, trial, dims, size, methodname):    
+def contour_prediction(test_dis, trial, dims, size, methodname):
     u_up = np.loadtxt(f'./data/{methodname}_{trial}_x_y_u_upred.dat')
-    
+
     n      = u_up.shape[0] // size
     x      = u_up[:,0].reshape(size, n).T
     y      = u_up[:,1].reshape(size, n).T
     u_star = u_up[:,2].reshape(size, n).T
     u_pred = u_up[:,3].reshape(size, n).T
     u_err  = abs(u_star - u_pred)
-    
+
     ### Follow MPI Cart Topology ###
     nx, ny   = dims
     x_joints = np.linspace(x.min(), x.max(), nx+1)
     y_joints = np.linspace(y.min(), y.max(), ny+1)
-    
-    varlist = ['u_star', 'u_pred', 'u_err']
-    for k, var in enumerate([u_star, u_pred, u_err]):
-        fig = plt.figure(figsize = (6,5)) #(x,y): 1D: (9,5); 2D: (6,5)
+
+    varlist = ['u_pred', 'u_star', 'u_err']
+    for k, var in enumerate([u_pred, u_star, u_err]):
+        fig = plt.figure(figsize = (7,6))
         gs = gridspec.GridSpec(ny, nx + 1, width_ratios=[1]*nx + [0.1], wspace=0., hspace=0.4)
 
         for i in range(nx):
@@ -103,8 +102,6 @@ def contour_prediction(omega, test_dis, trial, dims, size, methodname):
                 else:
                     vmax = np.max(u_star)
                     vmin = np.min(u_star)
-                #vmax = np.max(var)
-                #vmin = np.min(var)
 
                 ax = plt.subplot(gs[j,i])
                 pimg=plt.pcolormesh(x_sub ,y_sub ,var_sub,vmin=vmin, vmax=vmax, cmap=cmap, shading='gouraud')
@@ -117,21 +114,187 @@ def contour_prediction(omega, test_dis, trial, dims, size, methodname):
 
                 ax.label_outer()
                 ax.axis('scaled')
-                ax.title.set_text(f'({i},{j})') 
+                ax.title.set_text(f'({j},{i})')
 
         # Add colorbar to the right of the subplots
         cbar_ax = fig.add_subplot(gs[:, -1])
         ticks = np.linspace(vmin, vmax, 5, endpoint=True)
         cbar = fig.colorbar(pimg, cax=cbar_ax, ticks=ticks)
-        limit = np.ceil(vmax)-1
+        limit = np.ceil(np.log10(vmax))-1
         cbar.formatter.set_powerlimits((limit, limit))
         cbar.update_ticks()
-
-        #plt.title(f'w = {omega.cpu().numpy().tolist()}')
         plt.savefig(f'pic/{methodname}_{trial}_{varlist[k]}.png', dpi=300)
-        plt.close()
 
 
+# In[102]:
+
+
+def plot_update(trial, dims, size, outer_iter, methodname):
+    obj_s = []
+    mu_s = []
+    constr_s = []
+    lambda_s = []
+    q_s = []
+    l2_s = []
+    linf_s = []
+    for rank in range(size):
+        obj_s.append( np.loadtxt(f'data/{trial}_{rank}_object.dat') )
+        mu_s.append( np.loadtxt(f'data/{trial}_{rank}_mu.dat') )
+        constr_s.append( np.loadtxt(f'data/{trial}_{rank}_constr.dat') )
+        lambda_s.append( np.loadtxt(f'data/{trial}_{rank}_lambda.dat') )
+        q_s.append( np.loadtxt(f'data/{trial}_{rank}_q.dat') )
+        l2_s.append( np.loadtxt(f'data/{trial}_{rank}_l2.dat') )
+        linf_s.append( np.loadtxt(f'data/{trial}_{rank}_linf.dat') )
+
+    linestyles = ['-', ':', '-.', '--']
+    colors = ['b', 'g', 'r', 'k']  # Blue, Black, Green, Red
+    markers = ['o', 's', '^', 'd']  # Circle, Square, Triangle up, Diamond
+    
+    # randomly picking ranks
+    ncol, nrow   = dims
+    rank_locations = [(0,0), (3,1), (2,2), (4,2), (2,3), (1,4)] 
+    print(rank_locations)
+    
+    # Plot outer iterations v.s. objectives
+    fig = plt.figure(figsize = (4,4))
+    for i, rank_loc  in enumerate(rank_locations):
+        row = rank_loc[0]
+        col = rank_loc[1]
+        rank = col*nrow + row
+        plt.plot(obj_s[rank][:outer_iter,0], obj_s[rank][:outer_iter,1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+    plt.xlabel('Outer Iterations', fontsize=14)
+    plt.ylabel(r'$\mathcal{J}$', fontsize=14)
+    plt.semilogy()
+    plt.legend(prop={'size': 12}, frameon=False)
+    plt.tight_layout()
+    plt.savefig(f'pic/{methodname}_{trial}_objective.png', dpi=300)
+
+    # Plot outer iterations v.s. constraints
+    var_list = 'constr'
+    var = constr_s
+    constr_list = ['BC', 'PDE']
+    for n, constr_name in enumerate(constr_list):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc  in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            if var[rank][0,n+1] != 0.0:
+                plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,n+1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                        linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+        plt.xlabel('Outer Iterations', fontsize=14)
+        if constr_name == 'BC':
+            plt.ylabel(r'$\mathcal{C}_{B}$', fontsize=14)
+        else:
+            plt.ylabel(r'$\mathcal{C}_{P}$', fontsize=14)
+        plt.semilogy()
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{var_list}_{constr_name}.png', dpi=300)
+
+    # Plot outer iterations v.s. Lagrange multipliers
+    var_list = 'lambda'
+    var = lambda_s
+    constr_list = ['BC', 'PDE']
+    for n, constr_name in enumerate(constr_list):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            if constr_s[rank][-1,n+1] != 0.0:
+                plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,n+1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                         linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+        plt.xlabel('Outer Iterations', fontsize=14)
+        if constr_name == 'BC':
+            plt.ylabel(r'$\lambda_{B}$', fontsize=14)
+        else:
+            plt.ylabel(r'$\lambda_{P}$', fontsize=14)
+        plt.semilogy()
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{var_list}_{constr_name}.png', dpi=300)
+
+    # Plot outer iterations v.s. penalty parameters
+    var_list = 'mu'
+    var = mu_s
+    constr_list = ['BC', 'PDE']
+    for n, constr_name in enumerate(constr_list):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            if constr_s[rank][-1,n+1] != 0.0:
+                plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,n+1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                         linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+
+        plt.xlabel('Outer Iterations', fontsize=14)
+        if constr_name == 'BC':
+            plt.ylabel(r'$\mu_{B}$', fontsize=14)
+        else:
+            plt.ylabel(r'$\mu_{P}$', fontsize=14)
+        plt.semilogy()
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{var_list}_{constr_name}.png', dpi=300)
+
+    # Plot outer iterations v.s. interface parameters
+    var = q_s
+    inter_list = ['alpha', 'beta', 'gamma']
+    for n, inter_name in enumerate(inter_list):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,n+1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                    linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+        plt.xlabel('0uter Iterations', fontsize=14)
+        if n == 0:
+            plt.ylabel(r'$\alpha$', fontsize=14)
+            plt.legend(prop={'size': 12}, frameon=False)
+        elif n == 1:
+            plt.ylabel(r'$\beta$', fontsize=14)
+        else:
+            plt.ylabel(r'$\gamma$', fontsize=14)
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{inter_name}_inter_para.png', dpi=300)
+        
+    # Plot outer iterations v.s. interface ratios
+    inter_list = ['beta', 'gamma']
+    for n, inter_name in enumerate(inter_list):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,n+2]/var[rank][:outer_iter,1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                    linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+        plt.xlabel('0uter Iterations', fontsize=14)
+        if n == 0:
+            plt.ylabel(r'$\beta / \alpha$', fontsize=14)
+        else:
+            plt.ylabel(r'$\gamma/ \alpha$', fontsize=14)
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{inter_name}2alpha_ratio.png', dpi=300)
+
+    # Plot outer iterations v.s. norms
+    norm_list = ['l2', 'linf']
+    for n, var in enumerate([l2_s, linf_s]):
+        fig = plt.figure(figsize = (4,4))
+        for i, rank_loc in enumerate(rank_locations):
+            row = rank_loc[0]
+            col = rank_loc[1]
+            rank = col*nrow + row
+            plt.plot(var[rank][:outer_iter,0], var[rank][:outer_iter,1], label=f'({row},{col})', linestyle=linestyles[i//2], color=colors[i//2], 
+                    linewidth=2, marker=markers[i%2], markersize=5, markevery=outer_iter//5)
+        plt.xlabel('Outer Iterations', fontsize=14)
+        if n == 0:
+            plt.ylabel(r'$\mathcal{E}_r$', fontsize=14)
+        else:
+            plt.ylabel(r'$\mathcal{E}_{\infty}$', fontsize=14)
+        plt.semilogy()
+        plt.tight_layout()
+        plt.savefig(f'pic/{methodname}_{trial}_{norm_list[n]}.png', dpi=300)
 
 
 

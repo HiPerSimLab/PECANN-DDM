@@ -358,7 +358,7 @@ if size != dims[0]*dims[1]:
 cart_comm = comm.Create_cart(dims, periods=[False, False])
 
 # Name File Sample Method
-trials = 3 
+trials = 1 
 outer_iter = 1000
 epochs     = 100
 full_domain = np.array([[-8., -6.],

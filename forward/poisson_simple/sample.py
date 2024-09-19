@@ -68,37 +68,29 @@ def fetch_bounds(domain, batch_size):
     bd_r = torch.cat((xr, yr), dim = 1)
     return bd_u, bd_l, bd_d, bd_r # counter-clockwise
 
-def fetch_boundary_data(domain, batch_size):
-    x_min    = domain[0,0]
-    x_max    = domain[1,0]
-    y_min    = domain[0,1]
-    y_max    = domain[1,1]
+def fetch_boundary_data(domain, batch_size, rank, size, dims):
+    bd_u, bd_l, bd_d, bd_r = fetch_bounds(domain, batch_size)
+    
+    ### Follow MPI Cart Topology ###
+    nx, ny   = dims
+    x_rank = rank // ny
+    y_rank = rank % ny
 
-    edges = torch.randint(0, 4, (batch_size,1))
-    
-    sobol   = torch.quasirandom.SobolEngine(dimension=1,scramble=True)
-    t = sobol.draw(batch_size,dtype=torch.float64)
-    
-    # Sample points on the edges
-    x = torch.zeros((batch_size, 1))
-    y = torch.zeros((batch_size, 1))
-    
-    mask = edges == 0 # Bottom edge (x, 0)
-    x[mask] = t[mask] * (x_max - x_min) + x_min
-    y[mask] = y_min
-    
-    mask = edges == 1 # Right edge (1, y)
-    x[mask] = x_max
-    y[mask] = t[mask] * (y_max - y_min) + y_min
-    
-    mask = edges == 2 # Top edge (x, 1)
-    x[mask] = t[mask] * (x_max - x_min) + x_min
-    y[mask] = y_max
-    
-    mask = edges == 3 # Left edge (0, y)
-    x[mask] = x_min
-    y[mask] = t[mask] * (y_max - y_min) + y_min
-    
+    data = [] # counter-clockwise
+    if y_rank == 0:
+        data.append(bd_u)
+    if x_rank == 0:
+        data.append(bd_l)
+    if y_rank == ny-1:
+        data.append(bd_d)
+    if x_rank == nx-1:
+        data.append(bd_r)
+    if data == []:
+        data.append( torch.full((1, 2), float('nan')) )
+    data   = torch.cat(data, dim = 0)
+
+    x        = data[:,0][:,None]
+    y        = data[:,1][:,None]
     return x, y
 
 def fetch_interface_data(domain, batch_size, rank, size, dims):
@@ -146,4 +138,5 @@ def fetch_uniform_mesh(domain, dom_dis, surrounding=False):
     x = x.flatten()[:,None]
     y = y.flatten()[:,None]
     return x,y
+
 

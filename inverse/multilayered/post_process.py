@@ -123,7 +123,7 @@ def contour_prediction(test_dis, trial, dims, size, methodname):
         cbar_ax = fig.add_subplot(gs[:, -1])
         ticks = np.linspace(vmin, vmax, 5, endpoint=True)
         cbar = fig.colorbar(pimg, cax=cbar_ax, ticks=ticks)
-        limit = np.ceil(vmax)-1
+        limit = np.ceil(np.log10(vmax))-1
         cbar.formatter.set_powerlimits((limit, limit))
         cbar.update_ticks()
 

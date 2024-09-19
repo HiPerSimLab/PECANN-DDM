@@ -10,63 +10,62 @@ import numpy as np
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
+pi = torch.tensor(np.pi, device = device)
 
-def u_exact(x,y):
-    u = torch.zeros_like(x).detach()
-    for m in range(1, 50+1):
-        for n in range(1, 50+1):
-            lambda_mn = (m**2+n**2) * np.pi**2
-            integral_x = - (np.cos(3*m*np.pi/4)-np.cos(m*np.pi/4)) / (m*np.pi)
-            integral_y = - (np.cos(3*n*np.pi/4)-np.cos(n*np.pi/4)) / (n*np.pi)
-            Amn = -4/lambda_mn * integral_x * integral_y
-            u += Amn * torch.sin(m * np.pi * x) * torch.sin(n * np.pi * y)
-    return u
+def u_exact(x,y, freq):
+    u_e = torch.sin(freq[0] * pi * x) * torch.cos(freq[1] * pi * y) + torch.cos(freq[2] * pi * x) * torch.sin(freq[3] * pi * y)
+    return u_e
 
-def s_exact(x,y):
-    s       = torch.zeros_like(x).detach().to(device)
-    mask    = (x >= 0.25) & (x <= 0.75) & (y >= 0.25) & (y <= 0.75)
-    s[mask] = 1
-    return s
+def uxx_exact(x,y, freq):
+    term1 = - (freq[0] * pi).pow(2) * torch.sin(freq[0] * pi * x) * torch.cos(freq[1] * pi * y)
+    term2 = - (freq[2] * pi).pow(2) * torch.cos(freq[2] * pi * x) * torch.sin(freq[3] * pi * y)
+    return term1 + term2
 
-def physics_loss(model,x,y):
+def uyy_exact(x,y, freq):
+    term1 = - (freq[1] * pi).pow(2) * torch.sin(freq[0] * pi * x) * torch.cos(freq[1] * pi * y)
+    term2 = - (freq[3] * pi).pow(2) * torch.cos(freq[2] * pi * x) * torch.sin(freq[3] * pi * y)
+    return term1 + term2
+
+def s_exact(x,y, freq):
+    return uxx_exact(x,y, freq) + uyy_exact(x,y, freq)
+
+def physics_loss(model,x,y, freq):
     u         = model(x,y)
     u_x,u_y   = torch.autograd.grad(u.sum(),(x,y),create_graph=True,retain_graph=True)
     u_xx      = torch.autograd.grad(u_x.sum(),x,create_graph=True,retain_graph=True)[0]
     u_yy      = torch.autograd.grad(u_y.sum(),y,create_graph=True,retain_graph=True)[0]
-    s         = s_exact(x,y)
+    s         = s_exact(x,y, freq)
     loss      =  (u_xx + u_yy - s).pow(2) # poisson equation
-    return loss
+    return torch.mean(loss).reshape(1, 1)
 
-
-def boundary_loss(model,x,y):
+def boundary_loss(model,x,y, freq):
     if torch.isnan(x).any():
-        return torch.zeros_like(x).to(device)
+        return torch.zeros(1,1).to(device)
     else:
         u       = model(x,y)
-        u_bc    = 0.
-        e       = u - u_bc
-        return e.pow(2)
+        u_bc    = u_exact(x,y, freq)
+        loss    = (u - u_bc).pow(2)
+        return torch.mean(loss).reshape(1, 1)
 
-def avg_if_loss(Robin, model, x, y, u_adj, du_adj):
-    u    = model(x, y)
-    du   = torch.zeros_like(x).to(device)
-    
-    u_x,u_y   = torch.autograd.grad(u.sum(),(x,y),create_graph=True,retain_graph=True)
+def avg_if_loss(Alpha, model, x, y, u_adj, dudn_adj, dudt_adj):
+    n, num_interface = x.shape
+    avg_loss = torch.zeros(num_interface, 1, device=device)
 
-    mask = y == 0.25 # Bottom edge (x, 0.25)
-    du[mask] = u_y[mask]
-    
-    mask = x == 0.75 # Right edge (0.75, y)
-    du[mask] = u_x[mask]
-    
-    mask = y == 0.75 # Top edge (x, 0.75)
-    du[mask] = u_y[mask]
-    
-    mask = x == 0.25 # Left edge (0.25, y)
-    du[mask] = u_x[mask]
+    for i in range(num_interface):
+        x_col = x[:, i].reshape(-1, 1)
+        y_col = y[:, i].reshape(-1, 1)
+        u_col = model(x_col, y_col)
 
-    D    = u - u_adj  # interface dirichlet residual
-    N    = du - du_adj # interface neumann residual
-    
-    avg_loss =  (Robin[0] * D).pow(2).mean() + (Robin[1] * N).pow(2).mean()
-    return avg_loss.reshape(-1,1)
+        all_x_same = torch.all(x_col.eq(x_col[0]))
+        if all_x_same: #column has the same x
+            dudn_col,dudt_col = torch.autograd.grad(u_col.sum(), (x_col,y_col), create_graph=True)
+        else:
+            dudt_col,dudn_col = torch.autograd.grad(u_col.sum(), (x_col,y_col), create_graph=True)
+
+        G    = u_col - u_adj[:, i].reshape(-1, 1)  # interface dirichlete residual
+        F    = dudn_col - dudn_adj[:, i].reshape(-1, 1) # interface flux residual
+        T    = dudt_col - dudt_adj[:, i].reshape(-1, 1) # interface tangential derivative
+
+        avg_loss[i] =  (Alpha[0] * G).pow(2).mean() + (Alpha[1] * F).pow(2).mean() + (Alpha[2] * T).pow(2).mean()
+    return torch.mean(avg_loss).reshape(-1,1)
+
