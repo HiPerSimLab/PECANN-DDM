@@ -3,7 +3,7 @@
 #SBATCH --cluster=smp
 #SBATCH --nodes=1                # node count
 #SBATCH --ntasks-per-node=25      # total number of tasks per node
-#SBATCH --time=00-10:00:00          # total run time limit (HH:MM:SS)
+#SBATCH --time=00-20:00:00          # total run time limit (HH:MM:SS)
 #SBATCH --error=job.%J.err
 #SBATCH --output=job.%J.out
 crc-job-stats
