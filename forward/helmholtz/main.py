@@ -377,7 +377,7 @@ cart_comm = comm.Create_cart(dims, periods=[False, False])
 
 # Name File Sample Method
 trials = 1
-outer_iter = 10
+outer_iter = 30000
 epochs     = 100
 L      = torch.tensor([5.], device = device)
 full_domain = np.array([[0., 0.],
@@ -434,7 +434,7 @@ for trial in range(1, trials+1):
         l2_s.append(l2)
         linf_s.append(linf)
 
-        if count % 10==0:
+        if count % 100==0:
             # Global relative l2 norm
             l2, linf = evaluate_write(model, test_dis, dims, rank, size, methodname, trial, write=True)
             if rank == 0:
