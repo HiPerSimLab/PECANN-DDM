@@ -438,7 +438,7 @@ for trial in range(1, trials+1):
         l2_s.append(l2)
         linf_s.append(linf)
 
-        if count % 20==0:
+        if count % 100==0:
             # Global relative l2 norm
             l2, linf = evaluate_write(model, domain, test_dis, rank, size, methodname, trial, write=True)
             if rank == 0:
