@@ -35,3 +35,7 @@ Please cite us if you find our work useful for your research:
   url={https://arxiv.org/abs/2409.13644}, 
 }
 ```
+### Funding Acknowledgment
+This material is based upon work supported by the National Science Foundation under Grant No. 1953204 and in part in part by the University of Pittsburgh Center for Research Computing through the resources provided.
+### Questions and feedback?
+For questions or feedback feel free to reach us at [Qifeng Hu] (mailto:qih56@pitt.edu), [Inanc Senocak (mailto:senocak@pitt.edu),
