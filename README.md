@@ -6,7 +6,7 @@
 ### Summary:  
 We introduce a non-overlapping, Schwarz-type domain decomposition method employing a generalized interface condition, tailored for physics-informed machine learning of partial differential equations (PDEs) in both forward and inverse scenarios. Our method utilizes physics and equality constrained
 artificial neural networks (PECANN) in each subdomain. Diverging from the
-original PECANN method, which uses initial and boundary conditions to constrain
+original [PECANN](https://doi.org/10.1016/j.jcp.2022.111301) method, which uses initial and boundary conditions to constrain
 the PDEs alone, our method jointly employs both the boundary conditions and
 PDEs to constrain a specially formulated generalized interface loss function
 for each subdomain. This modification enhances the learning of
@@ -23,6 +23,7 @@ Interface model. A key strength of our approach is its capability to solve both
 Laplace's and Helmholtz equations with multi-scale solutions within a unified
 framework, highlighting its broad applicability and efficiency.
 
+We have substantially advanced our original PECANN method. Please see our latest work: [PECANN-CAPU](https://github.com/HiPerSimLab/PECANN-CAPU)
 ## Citation
 Please cite us if you find our work useful for your research:
 ```
