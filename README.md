@@ -1,4 +1,7 @@
 ##  Non-overlapping, Schwarz-type Domain Decomposition Method for Physics and Equality Constrained Artificial Neural Networks (PECANNs)
+
+**We have substantially advanced our original PECANN method. Please see our latest work:** [PECANN-CAPU](https://github.com/HiPerSimLab/PECANN-CAPU)
+
 ![plot](./forward/helmholtz/pic/helmholtz_multi_scale.png)
 
 ##  [Download publication](https://doi.org/10.1016/j.cma.2024.117706)
@@ -23,7 +26,7 @@ Interface model. A key strength of our approach is its capability to solve both
 Laplace's and Helmholtz equations with multi-scale solutions within a unified
 framework, highlighting its broad applicability and efficiency.
 
-**We have substantially advanced our original PECANN method. Please see our latest work:** [PECANN-CAPU](https://github.com/HiPerSimLab/PECANN-CAPU)
+
 
 ## Citation
 Please cite us if you find our work useful for your research:
