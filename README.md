@@ -1,7 +1,6 @@
 ##  Non-overlapping, Schwarz-type Domain Decomposition Method for Physics and Equality Constrained Artificial Neural Networks (PECANNs)
 
 **We have substantially advanced our original PECANN method. Please see our latest work:** [PECANN-CAPU](https://github.com/HiPerSimLab/PECANN-CAPU)
-
 ![plot](./forward/helmholtz/pic/helmholtz_multi_scale.png)
 
 ##  [Download publication](https://doi.org/10.1016/j.cma.2024.117706)
