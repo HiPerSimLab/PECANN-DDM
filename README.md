@@ -26,8 +26,6 @@ Interface model. A key strength of our approach is its capability to solve both
 Laplace's and Helmholtz equations with multi-scale solutions within a unified
 framework, highlighting its broad applicability and efficiency.
 
-
-
 ## Citation
 Please cite us if you find our work useful for your research:
 ```
